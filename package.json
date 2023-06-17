@@ -1,0 +1,13 @@
+{
+	"name": "read-serial-port",
+	"version": "1.0.0",
+	"description": "",
+	"main": "main.js",
+	"scripts": {},
+	"keywords": [],
+	"author": "LFF5644",
+	"license": "ISC",
+	"dependencies": {
+		"serialport": "^11.0.0"
+	}
+}
