@@ -8,6 +8,7 @@
 	"author": "LFF5644",
 	"license": "ISC",
 	"dependencies": {
-		"serialport": "^11.0.0"
+		"serialport": "^11.0.0",
+		"socket.io-client": "^4.6.2"
 	}
 }
