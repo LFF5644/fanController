@@ -58,16 +58,16 @@ function getTemperature(){
 }
 function setFanSpeed(fanSpeedPercent){
 	let fanSpeedByte=Math.round(getPercentToValue(fanSpeedPercent,255));
-	console.log(`change fan speed to ${fanSpeedPercent}%`);
 	fanSpeedByte=sendByte(fanSpeedByte);
 	fanSpeedPercent=Math.round(getValueToPercent(fanSpeedByte,255));
+	dynamic.fanSpeedPercent_real=fanSpeedPercent;
 	return fanSpeedPercent;
 }
 function onTemperatureChanged(temperature){
 	let fanSpeed=dynamic.fanSpeedPercent;
 	
-	const minTemperature=38;
-	const maxTemperature=45;
+	const minTemperature=36;
+	const maxTemperature=50;
 	const minFanSpeed=25;
 	const maxFanSpeed=100;
 
@@ -76,7 +76,6 @@ function onTemperatureChanged(temperature){
 	fanSpeed=Math.round(getValueToPercent(current,length));
 	if(fanSpeed<minFanSpeed) fanSpeed=minFanSpeed;
 	else if(fanSpeed>maxFanSpeed) fanSpeed=maxFanSpeed;
-	console.log(`FanSpeedPercent: ${fanSpeed}%, Temperature: ${temperature}`);
 	return fanSpeed;
 }
 
@@ -89,7 +88,6 @@ const port = new serialPort.SerialPort({
 
 port.on("open",()=>{
 	console.log("serial port open");
-	setTimeout(()=> setFanSpeed(dynamic.fanSpeedPercent),1e3);
 });
 port.on("data",buffer=>{
 	//process.stdout.write(buffer);
@@ -97,6 +95,7 @@ port.on("data",buffer=>{
 
 let dynamic={
 	fanSpeedPercent: null,
+	fanSpeedPercent_real: null,
 	last_temperature: null,
 	temperature: null,
 };
@@ -107,7 +106,17 @@ let dynamic={
 		dynamic.temperature=temperature;
 		const fanSpeedPercent=onTemperatureChanged(temperature);
 		dynamic.last_temperature=temperature;
-		dynamic.fanSpeedPercent=setFanSpeed(fanSpeedPercent);
+		dynamic.fanSpeedPercent=fanSpeedPercent;
 		await setTimeoutPromise(500); // wait 500ms aka. 0.5s
 	}
 })();
+
+setInterval(()=>{
+	if(dynamic.fanSpeedPercent_real===null) dynamic.fanSpeedPercent_real=dynamic.fanSpeedPercent;
+	
+	if(dynamic.fanSpeedPercent>dynamic.fanSpeedPercent_real) setFanSpeed(dynamic.fanSpeedPercent_real+1);
+	else if(dynamic.fanSpeedPercent<dynamic.fanSpeedPercent_real) setFanSpeed(dynamic.fanSpeedPercent_real-1);
+	else return;
+
+	console.log(`TEMP: ${dynamic.temperature}, fan want: ${dynamic.fanSpeedPercent}%, fan is: ${dynamic.fanSpeedPercent_real}%`);
+},300);
