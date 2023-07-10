@@ -15,6 +15,7 @@ function beep(text=""){
 	fs.writeFile("/dev/console","\x07"+text,()=>{});
 }
 function sendByte(byte){
+	if(!port.isOpen) console.log("cant send messages to closed serialport!");
 	if(byte>255) byte=255;
 	else if(byte<0) byte=0;
 	else if(typeof(byte)==="boolean"&&byte) byte=255;
@@ -65,7 +66,7 @@ function setFanSpeed(fanSpeedPercent){
 }
 function onTemperatureChanged(temperature){
 	let fanSpeed=dynamic.fanSpeedPercent;
-	
+
 	const minTemperature=36;
 	const maxTemperature=50;
 	const minFanSpeed=25;
@@ -87,7 +88,22 @@ const port = new serialPort.SerialPort({
 });
 
 port.on("open",()=>{
-	console.log("serial port open");
+	console.log("connected to fan controller!");
+});
+port.on("close",()=>{
+	console.log("connection to fan controller lost! try reconnect");
+	fn=()=>{
+		console.log("reconnecting ...");
+		port.open((error)=>error?setTimeout(fn,1e3):"");
+	};
+	setTimeout(fn,1e3);
+});
+port.on("error",error=>{
+	if(error.message.includes("No such file or directory, cannot open")){
+		console.log("cant connect to serial port cant open path!");
+		setTimeout(()=>port.open(),1e3);
+	}
+	else throw error;
 });
 port.on("data",buffer=>{
 	//process.stdout.write(buffer);
@@ -112,8 +128,9 @@ let dynamic={
 })();
 
 setInterval(()=>{
+	if(!port.isOpen) return;
 	if(dynamic.fanSpeedPercent_real===null) dynamic.fanSpeedPercent_real=dynamic.fanSpeedPercent;
-	
+
 	if(dynamic.fanSpeedPercent>dynamic.fanSpeedPercent_real) setFanSpeed(dynamic.fanSpeedPercent_real+1);
 	else if(dynamic.fanSpeedPercent<dynamic.fanSpeedPercent_real) setFanSpeed(dynamic.fanSpeedPercent_real-1);
 	else return;
