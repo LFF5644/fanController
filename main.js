@@ -5,7 +5,6 @@ const fs=require("fs");
 const serialPort = require('serialport');
 
 const delimiter="\n";
-let reading="";
 
 // lib functions
 function setTimeoutPromise(ms){return new Promise(resolve=>{
