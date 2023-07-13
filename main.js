@@ -6,6 +6,17 @@ const serialPort = require('serialport');
 
 const delimiter="\n";
 
+const blue = "\x1b[34m";
+const bright = "\x1b[1m";
+const colorReset="\x1b[0m";
+const green = "\x1b[32m";
+const red = "\x1b[31m";
+
+const minTemperature=36;
+const maxTemperature=50;
+const minFanSpeed=25;
+const maxFanSpeed=100;
+
 // lib functions
 function setTimeoutPromise(ms){return new Promise(resolve=>{
 	setTimeout(resolve,ms);
@@ -38,24 +49,26 @@ function getPercentToValue(percent,full=10){
 function getValueToPercent(value,full=10){
 	// "full" ist der Grundwert also 100%
 	// "value" ist der Prozentwert
-	
-	// 100%/full is 1%     
+
+	// 100%/full is 1%
 	return (100/full)*value;
 	// return number between 0 and 100
 }
 
 // normal functions
-function getTemperature(){
-	const temperature=Number(
-		child_process.execSync(`ssh ${remoteIp} cat /sys/class/thermal/thermal_zone0/temp`)
+function getTemperature(){return new Promise(resolve=>{
+	//console.log("tmp...");
+	child_process.exec(`ssh ${remoteIp} cat /sys/class/thermal/thermal_zone0/temp`,(error,stdout,stderr)=>{
+		if(error) console.log(error);
+		if(stderr) console.log(stderr);
+		const temperature=Number(stdout
 			.toString("utf-8")
 			.trim()
-	)/1000;
-
-	// for debugging \/
-	const temperature_fake=Number(fs.readFileSync("tmp.txt","utf-8").trim());
-	return temperature;
-}
+		)/1000;
+		//console.log("tmp is",temperature);
+		resolve(temperature);
+	});
+})}
 function setFanSpeed(fanSpeedPercent){
 	let fanSpeedByte=Math.round(getPercentToValue(fanSpeedPercent,255));
 	fanSpeedByte=sendByte(fanSpeedByte);
@@ -65,11 +78,6 @@ function setFanSpeed(fanSpeedPercent){
 }
 function onTemperatureChanged(temperature){
 	let fanSpeed=dynamic.fanSpeedPercent;
-
-	const minTemperature=36;
-	const maxTemperature=50;
-	const minFanSpeed=25;
-	const maxFanSpeed=100;
 
 	const current=minTemperature-temperature;
 	const length=minTemperature-maxTemperature;
@@ -117,7 +125,7 @@ let dynamic={
 
 (async()=>{//main
 	while(true){
-		const temperature=getTemperature();
+		const temperature=await getTemperature();
 		dynamic.temperature=temperature;
 		const fanSpeedPercent=onTemperatureChanged(temperature);
 		dynamic.last_temperature=temperature;
@@ -127,12 +135,34 @@ let dynamic={
 })();
 
 setInterval(()=>{
+	let fanStatus="keep";
 	if(!port.isOpen) return;
-	if(dynamic.fanSpeedPercent_real===null) dynamic.fanSpeedPercent_real=dynamic.fanSpeedPercent;
+	if(dynamic.fanSpeedPercent_real===null) dynamic.fanSpeedPercent_real=100;
+	if(dynamic.fanSpeedPercent>dynamic.fanSpeedPercent_real){
+		fanStatus="up";
+		setFanSpeed(dynamic.fanSpeedPercent_real+1);
+	}
+	else if(dynamic.fanSpeedPercent<dynamic.fanSpeedPercent_real){
+		fanStatus="down";
+		setFanSpeed(dynamic.fanSpeedPercent_real-1);
+	}
+	//else return;
 
-	if(dynamic.fanSpeedPercent>dynamic.fanSpeedPercent_real) setFanSpeed(dynamic.fanSpeedPercent_real+1);
-	else if(dynamic.fanSpeedPercent<dynamic.fanSpeedPercent_real) setFanSpeed(dynamic.fanSpeedPercent_real-1);
-	else return;
+	let temperature=Math.round(dynamic.temperature*10)/10;
+	if(temperature>=maxTemperature) temperature=red+temperature+colorReset;
+	if(temperature<=minTemperature) temperature=blue+temperature+colorReset;
 
-	console.log(`TEMP: ${dynamic.temperature}, fan want: ${dynamic.fanSpeedPercent}%, fan is: ${dynamic.fanSpeedPercent_real}%`);
+	let fanSpeedPercent=String(dynamic.fanSpeedPercent).padStart(2,"0");
+	if(fanSpeedPercent===maxFanSpeed) fanSpeedPercent=red+fanSpeedPercent;
+	else if(fanSpeedPercent===minFanSpeed) fanSpeedPercent=blue+fanSpeedPercent;
+
+	let fanSpeedPercent_real=String(dynamic.fanSpeedPercent_real).padStart(2,"0");
+	if(fanSpeedPercent_real===maxFanSpeed) fanSpeedPercent_real=red+fanSpeedPercent+colorReset;
+	else if(fanSpeedPercent_real===minFanSpeed) fanSpeedPercent_real=blue+fanSpeedPercent+colorReset;
+
+	if(fanStatus==="keep") fanStatus=green+bright+"="+colorReset;
+	else if(fanStatus==="down") fanStatus=blue+bright+"-"+colorReset;
+	else if(fanStatus==="up") fanStatus=red+bright+"+"+colorReset;
+
+	process.stdout.write(`\rTemperature: ${temperature}°C, FAN: ${fanSpeedPercent}% current ${fanSpeedPercent_real}% ${fanStatus} `);
 },300);
